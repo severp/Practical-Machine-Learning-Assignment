@@ -1,0 +1,69 @@
+---
+title: "The Quality of Physical Activity Recognition"
+author: "SEVER POPA"
+date: "April 9, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Abstract
+The main concern in physical activity is on the quantity and very rarely on the quality of the exercises. In this paper I will try to assess how well the lifting of the dumbell was performed. The data was colected from accelerometers on arm, forearm, belt and dumbell of 6 participants, who were asked to perform barbell lifts correctly and incorrectly in 5 ways.
+Using this data I fitted a model in order to recognize the way the exercise was done, coded in the classes A, B, C, D and E.
+
+## Loading the data
+The data, downloaded from [http://groupware.les.inf.puc-rio.br/har]<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv> as a .csv file, is loaded with:
+```{r loading data}
+date <- read.csv("pml-training.csv", na.strings = c("NA", "", " ", "#DIV/0!"))
+dim(date)
+```
+
+## Cleaning the data
+The file contains variables with most of the values NAs and some that identifies the subjects, factors that are not useful in classifiction and should be removed.
+```{r cleaning data}
+nas <- is.na(date) # find NAs
+# find the variables with most of the values NA
+nas1 <- apply(nas, 2, sum)
+nas2 <- cbind(nas1, 1:160)
+selector <- nas2[nas2[,1]<19000,2] # variables to keep
+selector <- selector[-(1:7)] # exclude the first 7 variables irrelevant for classification
+date <- date[,selector]
+length(selector)
+```
+There are 52 predictors so far and the outcome classe. Next I am looking for correlations and exclude the variables highly correlated.
+```{r find correlations}
+library(caret)
+datecorr <- cor(date[,-53]) # correlation matrix
+highCorr <- findCorrelation(datecorr, 0.9) # find highly correlated variables
+selector <- selector[-highCorr] # exclude highly correlated variables
+date <- date[,-highCorr]
+dim(date)
+```
+
+## Building the model
+I will build a random forest model as it provides a good accuracy. Random forest is based on decision trees. Each tree is build on a training set of the size of the data set, drawn by sampling with replacement. That means that for each model about 1/3 of the data (1/e) is left out of bag. The variables for each tree are randomly selected, the number is the mtry parameter which, by default, is for classification models square root of the number of predictors, rounded down. In the actual data set there will be mtry = 6. The predictions of each of the trees are voted and the result is the final prediction.
+The random forest doesn't need a cross validation, as it is done internally with out of bag data. However, I will split the data in training and testing set to ilustrate how the model is used.
+```{r sampling data}
+inTrain <- createDataPartition(date$classe, p = .8, list = FALSE)
+testing <- date[-inTrain,]
+training <- date[inTrain,]
+rbind(dim(training),dim(testing))
+```
+For fitting the model I will use randomForest package, as it runs fast enough.
+```{r fitting the model}
+library(randomForest)
+fit <- randomForest(classe~., data = training)
+fit
+```
+As seen in the confusion matrix, the model has a very good accuracy, the error rate for each class is under 1%.
+I will apply the model to the testing set and check the errors:
+```{r testing the model}
+prediction <- predict(fit,testing)
+confusionMatrix(prediction, testing$classe)
+```
+The accuracy is confirmed by prediction on the testing set.
+
+## Aknoledgements
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
